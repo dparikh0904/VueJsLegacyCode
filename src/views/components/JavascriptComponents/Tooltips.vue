@@ -92,13 +92,12 @@
   </div>
 </template>
 <script>
-import BTooltip from "bootstrap-vue/es/directives/tooltip/tooltip";
-import BPopover from "bootstrap-vue/es/directives/popover/popover";
+import { VBTooltip, VBPopover } from "bootstrap-vue";
 
 export default {
   directives: {
-    BTooltip,
-    BPopover
+    "b-tooltip": VBTooltip,
+    "b-popover": VBPopover
   }
 };
 </script>
