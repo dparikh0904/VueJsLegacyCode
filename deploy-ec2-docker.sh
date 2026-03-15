@@ -6,16 +6,94 @@
 #   EC2 instance:  ./deploy-ec2-docker.sh --run   -> pulls image from ECR & runs
 #   EC2 instance:  ./deploy-ec2-docker.sh --git   -> git pull + docker build on EC2 (no ECR needed)
 
+# ── MODE: --git (FIRST — no AWS credentials required) ────────────────────────
+if [ "$1" = "--git" ]; then
+    set -e
+    REPO_URL="${REPO_URL:-https://github.com/dparikh0904/VueJsLegacyCode.git}"
+    APP_DIR="${APP_DIR:-$HOME/VueJsLegacyCode}"
+    ECR_REPO="vue-argon-design-system"
+    IMAGE_TAG="${IMAGE_TAG:-latest}"
+    CONTAINER_NAME="vue-argon"
+    HOST_PORT="${HOST_PORT:-8080}"
+
+    echo "=========================================="
+    echo "  Vue Argon - Git + Docker Deploy"
+    echo "  (no AWS credentials needed)"
+    echo "=========================================="
+
+    echo ""
+    echo "📦 Installing Docker and Git (if not present)..."
+
+    if ! command -v docker &> /dev/null; then
+        if [ -f /etc/os-release ]; then
+            . /etc/os-release
+            if [ "$ID" = "amzn" ]; then
+                sudo yum update -y
+                sudo yum install -y docker git
+            elif [ "$ID" = "ubuntu" ] || [ "$ID" = "debian" ]; then
+                sudo apt-get update -y
+                sudo apt-get install -y docker.io git
+            fi
+        fi
+        sudo systemctl enable docker
+        sudo systemctl start docker
+        sudo usermod -aG docker "$USER"
+    fi
+
+    echo "✓ Docker : $(docker --version)"
+    echo "✓ Git    : $(git --version)"
+
+    echo ""
+    if [ -d "$APP_DIR/.git" ]; then
+        echo "📥 Pulling latest code..."
+        git -C "$APP_DIR" pull
+    else
+        echo "📥 Cloning repository..."
+        git clone "$REPO_URL" "$APP_DIR"
+    fi
+
+    echo ""
+    echo "🔨 Building Docker image on EC2..."
+    sudo docker build -t "${ECR_REPO}:${IMAGE_TAG}" "$APP_DIR"
+
+    echo ""
+    echo "🛑 Stopping existing container (if any)..."
+    sudo docker stop "$CONTAINER_NAME" 2>/dev/null || true
+    sudo docker rm   "$CONTAINER_NAME" 2>/dev/null || true
+
+    echo ""
+    echo "🚀 Starting container..."
+    sudo docker run -d \
+        --name "$CONTAINER_NAME" \
+        --restart unless-stopped \
+        -p "${HOST_PORT}:80" \
+        "${ECR_REPO}:${IMAGE_TAG}"
+
+    echo ""
+    echo "=========================================="
+    echo "  ✅ Container running (built from Git)!"
+    echo "=========================================="
+    PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo "YOUR_EC2_PUBLIC_IP")
+    echo "  URL: http://${PUBLIC_IP}:${HOST_PORT}"
+    echo ""
+    echo "  Useful commands:"
+    echo "    sudo docker ps                        - Check container status"
+    echo "    sudo docker logs $CONTAINER_NAME       - View logs"
+    echo "    sudo docker restart $CONTAINER_NAME    - Restart"
+    echo "    sudo docker stop $CONTAINER_NAME       - Stop"
+    echo "=========================================="
+    exit 0
+fi
+
 set -e
 
-# ─── Configuration ─────────────────────────────────────────────────────────────
+# ─── Configuration (ECR modes only) ────────────────────────────────────────────
 AWS_REGION="${AWS_REGION:-us-east-1}"
 ECR_REPO="vue-argon-design-system"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 CONTAINER_NAME="vue-argon"
 HOST_PORT="${HOST_PORT:-8080}"
 CONTAINER_PORT=80
-# AWS_ACCOUNT_ID is resolved lazily below (only needed for ECR modes)
 # ───────────────────────────────────────────────────────────────────────────────
 
 echo "=========================================="
