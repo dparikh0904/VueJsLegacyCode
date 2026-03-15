@@ -10,25 +10,25 @@ set -e
 
 # ─── Configuration ─────────────────────────────────────────────────────────────
 AWS_REGION="${AWS_REGION:-us-east-1}"
-AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:-$(aws sts get-caller-identity --query Account --output text)}"
 ECR_REPO="vue-argon-design-system"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 CONTAINER_NAME="vue-argon"
 HOST_PORT="${HOST_PORT:-8080}"
 CONTAINER_PORT=80
+# AWS_ACCOUNT_ID is resolved lazily below (only needed for ECR modes)
 # ───────────────────────────────────────────────────────────────────────────────
-
-ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
 
 echo "=========================================="
 echo "  Vue Argon - Docker/EC2 Deployment"
 echo "=========================================="
-echo "  ECR URI   : $ECR_URI:$IMAGE_TAG"
-echo "  Region    : $AWS_REGION"
-echo "=========================================="
 
 # ── MODE: --run (run on EC2) ──────────────────────────────────────────────────
 if [ "$1" = "--run" ]; then
+    AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:-$(aws sts get-caller-identity --query Account --output text)}"
+    ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
+    echo "  ECR URI   : $ECR_URI:$IMAGE_TAG"
+    echo "  Region    : $AWS_REGION"
+    echo "=========================================="
     echo ""
     echo "📦 Installing Docker (if not present)..."
 
@@ -90,6 +90,8 @@ fi
 
 # ── MODE: --git (clone/pull repo on EC2, build & run there) ────────────────────
 if [ "$1" = "--git" ]; then
+    echo "  Mode      : git pull + docker build (no AWS credentials needed)"
+    echo "=========================================="
     REPO_URL="${REPO_URL:-https://github.com/dparikh0904/VueJsLegacyCode.git}"
     APP_DIR="${APP_DIR:-$HOME/VueJsLegacyCode}"
 
@@ -158,6 +160,11 @@ if [ "$1" = "--git" ]; then
 fi
 
 # ── MODE: default (build & push from local machine) ──────────────────────────
+AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:-$(aws sts get-caller-identity --query Account --output text)}"
+ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
+echo "  ECR URI   : $ECR_URI:$IMAGE_TAG"
+echo "  Region    : $AWS_REGION"
+echo "=========================================="
 
 echo ""
 echo "🔍 Checking prerequisites..."
